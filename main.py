@@ -1,9 +1,23 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pickle
 import numpy as np
 
 app = FastAPI(title="Healthcare Triage API")
+
+# Configure CORS to allow your frontend to communicate with this backend
+origins = [
+    "*"  # Use "*" for testing, replace with your exact GitHub Pages URL later for production
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Load the newly trained expanded model
 with open('model.pkl', 'rb') as f:

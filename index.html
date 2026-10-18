@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instant Vitals Checker | Quick Health Risk Assessment</title>
+    <meta name="description" content="Enter your vital signs to instantly check if your health status is stable or requires emergency medical attention.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'cannoli': '#F0EFE2',
+                        'amazon': '#155F49',
+                        'darkred': '#8B0000'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F0EFE2; overflow: hidden; margin: 0; padding: 0; font-family: 'Uni Neue', system-ui, -apple-system, sans-serif; }
+        .font-nexa { font-family: 'Nexa Pro', system-ui, -apple-system, sans-serif; }
+        
+        #icon-bg-container { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; opacity: 0; transition: opacity 1s ease-in-out; }
+        #start-overlay { z-index: 70; }
+        #logo-container { z-index: 50; }
+        #loading-screen { z-index: 40; }
+        #processing-screen { z-index: 60; }
+        #main-screen { z-index: 10; position: relative; }
+
+        /* Logo Positioning - Removed Dashed Grid and Mask completely */
+        #logo-container { position: fixed; transition: all 0.8s ease-in-out; }
+        .logo-loading { top: 3%; left: 50%; transform: translate(-50%, 0) scale(1); }
+        .logo-corner { top: 1.5rem; left: 2rem; transform: translate(0, 0) scale(0.85); transform-origin: top left; }
+
+        .fade-transition { transition: opacity 0.4s ease-in-out; }
+        .hidden-screen { opacity: 0; pointer-events: none; }
+        .active-screen { opacity: 1; pointer-events: auto; }
+        
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100vw;
+            height: 100vh;
+            align-items: center;
+            justify-items: center;
+        }
+
+        @keyframes glitter {
+            0%, 100% { filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.8)) brightness(1.5); transform: scale(1.1) rotate(0deg); stroke: #8B0000; }
+            25% { filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1)) drop-shadow(0 0 10px rgba(255, 0, 0, 0.8)) brightness(2.2); transform: scale(1.2) rotate(-5deg); stroke: #FF2A2A; }
+            50% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 1)) brightness(1.7); transform: scale(1.1) rotate(5deg); stroke: #8B0000; }
+            75% { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 1)) drop-shadow(0 0 12px rgba(255, 215, 0, 1)) brightness(2.5); transform: scale(1.25) rotate(-2deg); stroke: #FF5555; }
+        }
+
+        .bg-icon {
+            stroke: rgba(21, 95, 73, 0.25); 
+            fill: none;
+            stroke-width: 1.5;
+            width: 28px;
+            height: 28px;
+            transition: transform 0.3s ease, filter 0.3s ease, stroke 0.3s ease;
+            pointer-events: auto;
+        }
+        .bg-icon:hover {
+            animation: glitter 0.5s infinite linear;
+            z-index: 5;
+            transition: none;
+        }
+
+        input, select { border: 2px solid #155F49; background: #F0EFE2; transition: all 0.2s; }
+        input:focus, select:focus { outline: none; border-color: #8B0000; box-shadow: 0 0 0 3px rgba(139, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="text-amazon h-screen w-screen flex flex-col">
+
+    <div id="icon-bg-container" class="icon-grid"></div>
+
+    <!-- Initialization Screen -->
+    <div id="start-overlay" class="fixed inset-0 bg-cannoli flex flex-col items-center justify-center fade-transition">
+        <button id="start-btn" class="bg-amazon text-cannoli px-8 py-4 rounded-full text-xl font-bold hover:bg-darkred transition-colors shadow-lg font-nexa">
+            Initialize System
+        </button>
+    </div>
+
+    <!-- Clean, Floating Logo (No Box/Grid) -->
+    <div id="logo-container" class="opacity-0 fade-transition logo-loading flex flex-col items-center">
+        <svg width="60" height="70" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto">
+            <path d="M50 120C50 120 10 90 10 40V15L50 0L90 15V40C90 90 50 120 50 120Z" fill="#155F49"/>
+            <path d="M15 55 H28 L33 35 L38.5 55" stroke="#F0EFE2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M61.5 55 L67 80 L73 55 H85" stroke="#F0EFE2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M46 44 H54 V51 H61 V59 H54 V66 H46 V59 H39 V51 H46 V44 Z" fill="#F0EFE2" stroke="#8B0000" stroke-width="3" stroke-linejoin="round"/>
+        </svg>
+        <h1 class="text-2xl font-extrabold mt-1 tracking-tight text-amazon text-center leading-tight font-nexa">
+            Instant Vitals <br/> <span class="font-normal text-xl tracking-widest uppercase mt-0.5 block">Checker</span>
+        </h1>
+    </div>
+
+    <!-- 3D ECG Machine Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center fade-transition hidden-screen bg-cannoli pt-40">
+        <div class="relative bg-[#E5E5D8] p-4 pb-8 rounded-3xl shadow-2xl border-b-8 border-gray-300 w-full max-w-4xl mx-6 flex flex-col items-center">
+            <!-- Reverted to the deep clinical dark monitor with green grid -->
+            <div class="bg-[#0A0D14] w-full h-72 rounded-xl relative overflow-hidden border-4 border-[#2A2E35] shadow-inner mb-6">
+                <div class="absolute inset-0 opacity-20" style="background-image: linear-gradient(#155F49 1px, transparent 1px), linear-gradient(90deg, #155F49 1px, transparent 1px); background-size: 20px 20px;"></div>
+                <canvas id="ecg-canvas" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
+            <div class="flex justify-between w-full px-8 items-center">
+                <div class="flex gap-4">
+                    <div class="w-8 h-3 bg-darkred rounded shadow-sm"></div>
+                    <div class="w-8 h-3 bg-amazon rounded shadow-sm"></div>
+                    <div class="w-8 h-3 bg-gray-400 rounded shadow-sm"></div>
+                </div>
+                <div class="grid grid-cols-5 gap-2">
+                    <div class="w-8 h-4 bg-gray-400/50 rounded shadow-sm"></div>
+                    <div class="w-8 h-4 bg-gray-400/50 rounded shadow-sm"></div>
+                    <div class="w-8 h-4 bg-gray-400/50 rounded shadow-sm"></div>
+                    <div class="w-8 h-4 bg-gray-400/50 rounded shadow-sm"></div>
+                    <div class="w-8 h-4 bg-gray-400/50 rounded shadow-sm"></div>
+                </div>
+                <div class="w-14 h-14 bg-gray-200 rounded-full shadow-md flex items-center justify-center border-b-4 border-gray-300">
+                    <div class="w-1 h-4 bg-gray-400 rounded-full -mt-6"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Interstitial Screen -->
+    <div id="processing-screen" class="fixed inset-0 bg-cannoli flex flex-col items-center justify-center fade-transition hidden-screen z-50">
+        <div class="flex flex-col items-center animate-pulse">
+            <svg width="80" height="90" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50 120C50 120 10 90 10 40V15L50 0L90 15V40C90 90 50 120 50 120Z" fill="#155F49"/>
+                <path d="M15 55 H28 L33 35 L38.5 55" stroke="#F0EFE2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M61.5 55 L67 80 L73 55 H85" stroke="#F0EFE2" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M46 44 H54 V51 H61 V59 H54 V66 H46 V59 H39 V51 H46 V44 Z" fill="#F0EFE2" stroke="#8B0000" stroke-width="3" stroke-linejoin="round"/>
+            </svg>
+            <h2 class="text-2xl font-bold text-amazon font-nexa mt-6 tracking-wide">Analyzing clinical parameters...</h2>
+        </div>
+    </div>
+
+    <!-- Main Form & Results Screen Layout -->
+    <div id="main-screen" class="fixed inset-0 pt-32 pb-4 px-6 flex flex-col items-center justify-center fade-transition hidden-screen pointer-events-none">
+        <div class="w-full max-w-4xl bg-white p-8 rounded-2xl shadow-xl border-t-8 border-darkred relative z-10 pointer-events-auto">
+            
+            <!-- Section 1: The Form -->
+            <div id="form-section">
+                <div class="text-center mb-8">
+                    <h2 class="text-4xl font-extrabold text-amazon font-nexa">Your health, in seconds</h2>
+                    <p class="text-amazon/70 text-sm font-bold tracking-widest uppercase mt-2">NEWS2 Automated Triage Protocol</p>
+                </div>
+
+                <form id="triage-form" class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Age</label>
+                        <input type="number" id="age" required class="w-full p-2.5 rounded text-amazon font-bold" placeholder="e.g. 55">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Heart Rate</label>
+                        <input type="number" id="hr" required class="w-full p-2.5 rounded text-amazon font-bold" placeholder="BPM">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Systolic BP</label>
+                        <input type="number" id="bp" required class="w-full p-2.5 rounded text-amazon font-bold" placeholder="mmHg">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Resp Rate</label>
+                        <input type="number" id="resp" required class="w-full p-2.5 rounded text-amazon font-bold" placeholder="/min">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">SpO2 %</label>
+                        <input type="number" id="spo2" required class="w-full p-2.5 rounded text-amazon font-bold" placeholder="%">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Temp (°C)</label>
+                        <input type="number" id="temp" required step="0.1" class="w-full p-2.5 rounded text-amazon font-bold" placeholder="°C">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">O2 Supp</label>
+                        <select id="supp_o2" class="w-full p-2.5 rounded font-bold">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-xs font-bold text-amazon mb-1">Alertness</label>
+                        <select id="alert" class="w-full p-2.5 rounded font-bold">
+                            <option value="1">Alert</option>
+                            <option value="0">Not Alert</option>
+                        </select>
+                    </div>
+
+                    <div class="col-span-1 md:col-span-4 mt-4">
+                        <button type="button" onclick="testPrediction()" class="w-full bg-amazon hover:bg-[#0f4434] text-white font-bold py-4 rounded-lg transition-all shadow-md flex justify-center items-center gap-2">
+                            <svg class="w-5 h-5 text-darkred" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            <span class="font-nexa text-lg">Generate Triage Score</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Section 2: The Dedicated Results -->
+            <div id="result-section" class="hidden flex-col items-center w-full">
+                <div class="text-center mb-6">
+                    <h2 class="text-3xl font-extrabold text-amazon font-nexa">Assessment Complete</h2>
+                </div>
+                <div id="result-box" class="w-full p-8 rounded-xl border-l-8 text-left shadow-sm">
+                    <h3 class="text-2xl font-bold font-nexa" id="result-title"></h3>
+                    <p id="result-desc" class="text-lg mt-2 font-medium"></p>
+                </div>
+                <button type="button" onclick="resetForm()" class="mt-8 bg-cannoli text-amazon border-2 border-amazon hover:bg-amazon hover:text-white font-bold py-3 px-8 rounded-lg transition-all font-nexa">
+                    Perform New Assessment
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function initIconBackground() {
+            const container = document.getElementById('icon-bg-container');
+            const svgs = [
+                '<path d="M2 12 h4 l2 -5 l4 10 l2 -5 h8" stroke-linejoin="round"/>', 
+                '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z M12 6 v-4 h4"/>',
+                '<path d="M6 4 c0 4, 12 12, 12 16 M18 4 c0 4, -12 12, -12 16 M6 8 h12 M6 16 h12 M9 12 h6"/>',
+                '<path d="M9 3 h6 v6 h6 v6 h-6 v6 h-6 v-6 h-6 v-6 h6 z"/>',
+                '<path d="M12 2 v20 M12 6 l-4 -4 M12 6 l4 -4 M8 8 c4 -4, 8 4, 4 8 c-4 4, 4 8, 0 12 M16 8 c-4 -4, -8 4, -4 8 c4 4, -4 8, 0 12"/>',
+                '<path d="M12 12 m-8 0 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0 M12 12 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M18 6 m-1 0 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0"/>',
+                '<path d="M6 6 a3 3 0 0 1 6 0 v4 a3 3 0 0 1 -6 0 z M14 14 a3 3 0 0 1 6 0 v4 a3 3 0 0 1 -6 0 z M4 14 h4 M16 6 h4"/>',
+                '<path d="M14 6 a4 4 0 0 0 -8 0 v8 a4 4 0 0 0 8 0 M10 14 v4 M6 18 h8 M16 12 l4 4 v2"/>',
+                '<path d="M2 12 h4 v-6 h4 v12 h4 v-6 h8" stroke-linejoin="round"/>',
+                '<path d="M12 20 a8 8 0 0 1 -8 -8 a4 4 0 0 1 4 -4 a4 4 0 0 1 8 0 a4 4 0 0 1 4 4 a8 8 0 0 1 -8 8 z M12 4 v16"/>',
+                '<path d="M6 6 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M18 6 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M12 18 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M7.5 7.5 l3 9 M16.5 7.5 l-3 9 M8 6 h8"/>',
+                '<path d="M12 2 v20 M10 6 c2 -2, 4 2, 2 4 c-2 2, 2 6, 0 8"/>'
+            ];
+
+            const cols = 12;
+            const rows = 8;
+            
+            for(let r = 0; r < rows; r++) {
+                for(let c = 0; c < cols; c++) {
+                    // Reinstated Strict Dead Zone: Keeps the top-left 3x3 sector perfectly clean
+                    if (c < 3 && r < 3) continue;
+
+                    const svgStr = svgs[Math.floor(Math.random() * svgs.length)];
+                    const el = document.createElement('div');
+                    el.className = 'bg-icon';
+                    el.innerHTML = `<svg viewBox="0 0 24 24" width="100%" height="100%">${svgStr}</svg>`;
+                    el.style.transform = `rotate(${Math.floor(Math.random() * 4) * 90}deg)`; 
+                    
+                    const leftVW = (c * (100 / cols)) + (Math.random() * (100 / cols) * 0.7); 
+                    const topVH = (r * (100 / rows)) + (Math.random() * (100 / rows) * 0.7);
+                    
+                    el.style.position = 'absolute';
+                    el.style.left = `${leftVW}vw`;
+                    el.style.top = `${topVH}vh`;
+
+                    container.appendChild(el);
+                }
+            }
+        }
+
+        const startBtn = document.getElementById('start-btn');
+        startBtn.addEventListener('click', () => {
+            document.getElementById('start-overlay').classList.add('hidden-screen');
+            
+            const logo = document.getElementById('logo-container');
+            logo.classList.remove('opacity-0');
+            document.getElementById('loading-screen').classList.remove('hidden-screen');
+            document.getElementById('loading-screen').classList.add('active-screen');
+            
+            initIconBackground(); 
+            initAudio();
+            startCanvasAnimation();
+        });
+
+        let audioCtx;
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const masterGain = audioCtx.createGain();
+            masterGain.connect(audioCtx.destination);
+            function playBeep(time, volume, freq) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, time);
+                gain.gain.setValueAtTime(0, time);
+                gain.gain.linearRampToValueAtTime(volume, time + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start(time);
+                osc.stop(time + 0.3);
+            }
+            const now = audioCtx.currentTime;
+            
+            playBeep(now + 0.3, 0.3, 400); 
+            playBeep(now + 0.9, 0.4, 450); 
+            playBeep(now + 1.5, 0.6, 500); 
+            
+            setTimeout(() => {
+                const finalOsc1 = audioCtx.createOscillator();
+                const finalOsc2 = audioCtx.createOscillator();
+                const finalGain = audioCtx.createGain();
+                finalOsc1.frequency.value = 523.25; 
+                finalOsc2.frequency.value = 659.25; 
+                finalGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                finalGain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.1);
+                finalGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+                finalOsc1.connect(finalGain); finalOsc2.connect(finalGain);
+                finalGain.connect(audioCtx.destination);
+                finalOsc1.start(); finalOsc2.start();
+                finalOsc1.stop(audioCtx.currentTime + 1); finalOsc2.stop(audioCtx.currentTime + 1);
+            }, 1800);
+        }
+
+        function startCanvasAnimation() {
+            const canvas = document.getElementById('ecg-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            const duration = 1800; 
+            const startTime = performance.now();
+            let particles = [];
+            let currentHeadX = 0, currentHeadY = canvas.height / 2;
+
+            function interpolateColor(color1, color2, factor) {
+                let result = color1.slice();
+                for (let i = 0; i < 3; i++) {
+                    result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
+                }
+                return `rgb(${result[0]}, ${result[1]}, ${result[2]})`;
+            }
+
+            function drawFrame(currentTime) {
+                let timeElapsed = currentTime - startTime;
+                let loadProgress = Math.min(timeElapsed / duration, 1);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Reverted Colors to Red -> Green
+                let currentColor;
+                const red = [139, 0, 0];
+                const orange = [210, 105, 30];
+                const green = [21, 95, 73];
+                
+                if (loadProgress < 0.5) {
+                    currentColor = interpolateColor(red, orange, loadProgress * 2);
+                } else {
+                    currentColor = interpolateColor(orange, green, (loadProgress - 0.5) * 2);
+                }
+
+                ctx.beginPath();
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = 3.5;
+                ctx.lineJoin = 'miter';
+                ctx.miterLimit = 2;
+                ctx.lineCap = 'butt';
+
+                const centerY = canvas.height / 2;
+                const currentDrawX = canvas.width * loadProgress;
+                
+                ctx.moveTo(0, centerY);
+                let x = 0, y = centerY;
+                
+                // Sharp Dual Peak Rectilinear EKG Waveform preserved
+                while (x < currentDrawX) {
+                    y = centerY;
+                    let relativeX = x % 300; 
+                    if (relativeX > 25 && relativeX < 40) {
+                        y = centerY - 15; 
+                    } else if (relativeX >= 60 && relativeX < 67) {
+                        y = centerY + 12; 
+                    } else if (relativeX >= 67 && relativeX < 73) {
+                        y = centerY - 115; 
+                    } else if (relativeX >= 73 && relativeX < 80) {
+                        y = centerY + 85; 
+                    } else if (relativeX >= 80 && relativeX < 85) {
+                        y = centerY; 
+                    } else if (relativeX >= 105 && relativeX < 118) {
+                        y = centerY - 40; 
+                    } else if (relativeX >= 118 && relativeX < 125) {
+                        y = centerY + 20; 
+                    }
+                    ctx.lineTo(x, y);
+                    x += 2;
+                }
+                ctx.stroke();
+
+                currentHeadX = x;
+                currentHeadY = y;
+
+                if (loadProgress < 0.90 && Math.random() < 0.4) {
+                    particles.push({
+                        x: Math.random() < 0.5 ? -30 : canvas.width + 30,
+                        y: Math.random() < 0.5 ? -30 : canvas.height + 30,
+                        type: Math.random() > 0.5 ? 'cross' : 'heart',
+                        speed: 15 + Math.random() * 10
+                    });
+                }
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    let dx = currentHeadX - p.x;
+                    let dy = currentHeadY - p.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < p.speed) {
+                        particles.splice(i, 1);
+                        continue;
+                    }
+
+                    p.x += (dx / dist) * p.speed;
+                    p.y += (dy / dist) * p.speed;
+                    
+                    ctx.fillStyle = currentColor;
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    if (p.type === 'cross') {
+                        ctx.fillRect(-6, -2, 12, 4);
+                        ctx.fillRect(-2, -6, 4, 12);
+                    } else {
+                        ctx.beginPath();
+                        ctx.arc(-3, 0, 3, 0, Math.PI * 2);
+                        ctx.arc(3, 0, 3, 0, Math.PI * 2);
+                        ctx.lineTo(0, 6);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+
+                if (loadProgress < 1 || particles.length > 0) {
+                    requestAnimationFrame(drawFrame);
+                } else {
+                    setTimeout(() => {
+                        document.getElementById('loading-screen').classList.remove('active-screen');
+                        document.getElementById('loading-screen').classList.add('hidden-screen');
+                        
+                        document.getElementById('main-screen').classList.remove('hidden-screen');
+                        document.getElementById('main-screen').classList.add('active-screen');
+                        
+                        const logo = document.getElementById('logo-container');
+                        logo.classList.remove('logo-loading');
+                        logo.classList.add('logo-corner');
+                        
+                        document.getElementById('icon-bg-container').style.opacity = '1';
+                    }, 100);
+                }
+            }
+            requestAnimationFrame(drawFrame);
+        }
+
+        function testPrediction() {
+            const mainScreen = document.getElementById('main-screen');
+            const processScreen = document.getElementById('processing-screen');
+            
+            mainScreen.classList.remove('active-screen');
+            mainScreen.classList.add('hidden-screen');
+            
+            processScreen.classList.remove('hidden-screen');
+            processScreen.classList.add('active-screen');
+            
+            setTimeout(() => {
+                processScreen.classList.remove('active-screen');
+                processScreen.classList.add('hidden-screen');
+                
+                const hr = document.getElementById('hr').value;
+                const formSection = document.getElementById('form-section');
+                const resultSection = document.getElementById('result-section');
+                const box = document.getElementById('result-box');
+                const title = document.getElementById('result-title');
+                const desc = document.getElementById('result-desc');
+                
+                formSection.classList.add('hidden');
+                resultSection.classList.remove('hidden');
+                resultSection.classList.add('flex');
+                
+                box.className = 'w-full p-8 rounded-xl border-l-8 text-left shadow-sm';
+                
+                if (hr > 130) {
+                    box.classList.add('border-darkred', 'bg-darkred/10', 'text-darkred');
+                    title.innerText = "CRITICAL: Immediate Attention Required";
+                    desc.innerText = "Patient parameters trigger standard NEWS2 emergency escalation thresholds.";
+                } else {
+                    box.classList.add('border-amazon', 'bg-amazon/10', 'text-amazon');
+                    title.innerText = "STABLE: Monitor Normally";
+                    desc.innerText = "Patient parameters fall within acceptable baseline limits.";
+                }
+                
+                mainScreen.classList.remove('hidden-screen');
+                mainScreen.classList.add('active-screen');
+                
+            }, 2500);
+        }
+
+        function resetForm() {
+            document.getElementById('result-section').classList.add('hidden');
+            document.getElementById('result-section').classList.remove('flex');
+            document.getElementById('form-section').classList.remove('hidden');
+            document.getElementById('triage-form').reset();
+        }
+    </script>
+</body>
+</html>
