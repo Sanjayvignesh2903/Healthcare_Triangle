@@ -3,25 +3,41 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 import pickle
 
-# 1. Generate 1,000 synthetic patient records
+# 1. Generate 1,000 synthetic patient records with expanded clinical vitals
 np.random.seed(42)
 n_samples = 1000
 
 data = {
     "age": np.random.randint(18, 90, n_samples),
-    "heart_rate": np.random.randint(60, 160, n_samples),
-    "blood_pressure_systolic": np.random.randint(80, 200, n_samples)
+    "heart_rate": np.random.randint(40, 150, n_samples),
+    "blood_pressure_systolic": np.random.randint(80, 200, n_samples),
+    "respiratory_rate": np.random.randint(10, 35, n_samples),
+    "spo2": np.random.randint(85, 100, n_samples),
+    "temperature": np.random.uniform(35.0, 40.0, n_samples),
+    "supplemental_oxygen": np.random.randint(0, 2, n_samples), # 0 = No, 1 = Yes
+    "consciousness_alert": np.random.randint(0, 2, n_samples)  # 1 = Alert, 0 = Not Alert
 }
 df = pd.DataFrame(data)
 
-# Medical logic: High heart rate + high BP = Critical (1), else Stable (0)
-df['severity'] = np.where((df['heart_rate'] > 120) & (df['blood_pressure_systolic'] > 150), 1, 0)
+# Medical logic based loosely on clinical deterioration thresholds
+# Critical (1) if: SpO2 < 92 OR heart rate > 130 OR respiratory rate > 25 OR not alert
+df['severity'] = np.where(
+    (df['spo2'] < 92) | 
+    (df['heart_rate'] > 130) | 
+    (df['respiratory_rate'] > 25) | 
+    (df['consciousness_alert'] == 0), 1, 0
+)
 
 # 2. Train the Machine Learning Model
-X = df[['age', 'heart_rate', 'blood_pressure_systolic']]
+feature_cols = [
+    'age', 'heart_rate', 'blood_pressure_systolic', 
+    'respiratory_rate', 'spo2', 'temperature', 
+    'supplemental_oxygen', 'consciousness_alert'
+]
+X = df[feature_cols]
 y = df['severity']
 
-print("Training Random Forest model...")
+print("Training expanded Random Forest model...")
 model = RandomForestClassifier(n_estimators=100, random_state=42)
 model.fit(X, y)
 
@@ -29,4 +45,4 @@ model.fit(X, y)
 with open('model.pkl', 'wb') as f:
     pickle.dump(model, f)
     
-print("Success! model.pkl has been created.")
+print("Success! Expanded model.pkl has been created.")

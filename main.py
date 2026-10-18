@@ -5,37 +5,40 @@ import numpy as np
 
 app = FastAPI(title="Healthcare Triage API")
 
-# 1. Load the trained model into memory when the server starts
-with open("model.pkl", "rb") as f:
+# Load the newly trained expanded model
+with open('model.pkl', 'rb') as f:
     model = pickle.load(f)
 
-# 2. Define the expected data format
-class PatientSymptoms(BaseModel):
+# Define the required incoming data format (now matching NEWS2 parameters)
+class PatientVitals(BaseModel):
     age: int
     heart_rate: int
     blood_pressure_systolic: int
+    respiratory_rate: int
+    spo2: float
+    temperature: float
+    supplemental_oxygen: int
+    consciousness_alert: int
 
-# 3. The Health Check for Zero-Downtime Deployment
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "version": "1.0.0"}
 
-# 4. The Real Prediction Endpoint
 @app.post("/predict")
-def predict_triage(symptoms: PatientSymptoms):
-    # Convert the incoming JSON into a format the model understands
-    input_data = np.array([[
-        symptoms.age, 
-        symptoms.heart_rate, 
-        symptoms.blood_pressure_systolic
+def predict_triage(vitals: PatientVitals):
+    # Extract the features in the EXACT same order used during training
+    features = np.array([[
+        vitals.age,
+        vitals.heart_rate,
+        vitals.blood_pressure_systolic,
+        vitals.respiratory_rate,
+        vitals.spo2,
+        vitals.temperature,
+        vitals.supplemental_oxygen,
+        vitals.consciousness_alert
     ]])
     
-    # Ask the model for a prediction
-    prediction = model.predict(input_data)[0]
+    prediction = model.predict(features)[0]
+    status = "Critical" if prediction == 1 else "Stable"
     
-    severity = "Critical" if prediction == 1 else "Stable"
-    
-    return {
-        "symptoms_received": symptoms,
-        "predicted_severity": severity
-    }
+    return {"prediction": int(prediction), "triage_level": status}
