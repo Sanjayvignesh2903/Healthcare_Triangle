@@ -30,7 +30,7 @@
         #processing-screen { z-index: 60; }
         #main-screen { z-index: 10; position: relative; }
 
-        /* Logo Positioning - Removed Dashed Grid and Mask completely */
+        /* Clean, Floating Logo (No Dashed Border or Grid Mask) */
         #logo-container { position: fixed; transition: all 0.8s ease-in-out; }
         .logo-loading { top: 3%; left: 50%; transform: translate(-50%, 0) scale(1); }
         .logo-corner { top: 1.5rem; left: 2rem; transform: translate(0, 0) scale(0.85); transform-origin: top left; }
@@ -86,7 +86,7 @@
         </button>
     </div>
 
-    <!-- Clean, Floating Logo (No Box/Grid) -->
+    <!-- Clean, Floating Logo -->
     <div id="logo-container" class="opacity-0 fade-transition logo-loading flex flex-col items-center">
         <svg width="60" height="70" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto">
             <path d="M50 120C50 120 10 90 10 40V15L50 0L90 15V40C90 90 50 120 50 120Z" fill="#155F49"/>
@@ -102,7 +102,6 @@
     <!-- 3D ECG Machine Loading Screen -->
     <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center fade-transition hidden-screen bg-cannoli pt-40">
         <div class="relative bg-[#E5E5D8] p-4 pb-8 rounded-3xl shadow-2xl border-b-8 border-gray-300 w-full max-w-4xl mx-6 flex flex-col items-center">
-            <!-- Reverted to the deep clinical dark monitor with green grid -->
             <div class="bg-[#0A0D14] w-full h-72 rounded-xl relative overflow-hidden border-4 border-[#2A2E35] shadow-inner mb-6">
                 <div class="absolute inset-0 opacity-20" style="background-image: linear-gradient(#155F49 1px, transparent 1px), linear-gradient(90deg, #155F49 1px, transparent 1px); background-size: 20px 20px;"></div>
                 <canvas id="ecg-canvas" class="absolute inset-0 w-full h-full"></canvas>
@@ -240,7 +239,7 @@
             
             for(let r = 0; r < rows; r++) {
                 for(let c = 0; c < cols; c++) {
-                    // Reinstated Strict Dead Zone: Keeps the top-left 3x3 sector perfectly clean
+                    // Strict Dead Zone: Keeps the top-left 3x3 sector perfectly clean behind the logo
                     if (c < 3 && r < 3) continue;
 
                     const svgStr = svgs[Math.floor(Math.random() * svgs.length)];
@@ -451,47 +450,83 @@
             requestAnimationFrame(drawFrame);
         }
 
-        function testPrediction() {
+        async function testPrediction() {
             const mainScreen = document.getElementById('main-screen');
             const processScreen = document.getElementById('processing-screen');
             
+            // 1. Hide form screen, show processing animation screen
             mainScreen.classList.remove('active-screen');
             mainScreen.classList.add('hidden-screen');
-            
             processScreen.classList.remove('hidden-screen');
             processScreen.classList.add('active-screen');
-            
-            setTimeout(() => {
+
+            // 2. Map form values to match your FastAPI PatientVitals schema exactly
+            const payload = {
+                age: parseInt(document.getElementById('age').value) || 0,
+                heart_rate: parseInt(document.getElementById('hr').value) || 0,
+                blood_pressure_systolic: parseInt(document.getElementById('bp').value) || 0,
+                respiratory_rate: parseInt(document.getElementById('resp').value) || 0,
+                spo2: parseFloat(document.getElementById('spo2').value) || 0.0,
+                temperature: parseFloat(document.getElementById('temp').value) || 0.0,
+                supplemental_oxygen: parseInt(document.getElementById('supp_o2').value) || 0,
+                consciousness_alert: parseInt(document.getElementById('alert').value) || 0
+            };
+
+            try {
+                // Send actual POST request to your live Render backend
+                const response = await fetch('https://triage-api-1qji.onrender.com/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server returned status ${response.status}`);
+                }
+
+                const data = await response.json(); 
+
+                // Keep the processing animation visible for a smooth UX
+                setTimeout(() => {
+                    processScreen.classList.remove('active-screen');
+                    processScreen.classList.add('hidden-screen');
+
+                    const formSection = document.getElementById('form-section');
+                    const resultSection = document.getElementById('result-section');
+                    const box = document.getElementById('result-box');
+                    const title = document.getElementById('result-title');
+                    const desc = document.getElementById('result-desc');
+
+                    formSection.classList.add('hidden');
+                    resultSection.classList.remove('hidden');
+                    resultSection.classList.add('flex');
+
+                    box.className = 'w-full p-8 rounded-xl border-l-8 text-left shadow-sm';
+
+                    if (data.triage_level === "Critical" || data.prediction === 1) {
+                        box.classList.add('border-darkred', 'bg-darkred/10', 'text-darkred');
+                        title.innerText = "CRITICAL: Immediate Attention Required";
+                        desc.innerText = "Machine learning classification indicates acute clinical escalation under NEWS2 protocol.";
+                    } else {
+                        box.classList.add('border-amazon', 'bg-amazon/10', 'text-amazon');
+                        title.innerText = "STABLE: Monitor Normally";
+                        desc.innerText = "Vital parameters remain within normal threshold bounds.";
+                    }
+
+                    mainScreen.classList.remove('hidden-screen');
+                    mainScreen.classList.add('active-screen');
+                }, 1500);
+
+            } catch (err) {
+                console.error("Prediction error:", err);
                 processScreen.classList.remove('active-screen');
                 processScreen.classList.add('hidden-screen');
-                
-                const hr = document.getElementById('hr').value;
-                const formSection = document.getElementById('form-section');
-                const resultSection = document.getElementById('result-section');
-                const box = document.getElementById('result-box');
-                const title = document.getElementById('result-title');
-                const desc = document.getElementById('result-desc');
-                
-                formSection.classList.add('hidden');
-                resultSection.classList.remove('hidden');
-                resultSection.classList.add('flex');
-                
-                box.className = 'w-full p-8 rounded-xl border-l-8 text-left shadow-sm';
-                
-                if (hr > 130) {
-                    box.classList.add('border-darkred', 'bg-darkred/10', 'text-darkred');
-                    title.innerText = "CRITICAL: Immediate Attention Required";
-                    desc.innerText = "Patient parameters trigger standard NEWS2 emergency escalation thresholds.";
-                } else {
-                    box.classList.add('border-amazon', 'bg-amazon/10', 'text-amazon');
-                    title.innerText = "STABLE: Monitor Normally";
-                    desc.innerText = "Patient parameters fall within acceptable baseline limits.";
-                }
-                
                 mainScreen.classList.remove('hidden-screen');
                 mainScreen.classList.add('active-screen');
-                
-            }, 2500);
+                alert("Failed to connect to the triage backend. Note: Render free instances spin down after inactivity, so the initial request may take ~30-50 seconds to wake up.");
+            }
         }
 
         function resetForm() {
