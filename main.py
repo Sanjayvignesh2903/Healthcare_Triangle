@@ -8,7 +8,7 @@ app = FastAPI(title="Healthcare Triage API")
 
 # Configure CORS to allow your frontend to communicate with this backend
 origins = [
-    "*"  # Use "*" for testing, replace with your exact GitHub Pages URL later for production
+    "*" 
 ]
 
 app.add_middleware(
@@ -39,20 +39,26 @@ def health_check():
     return {"status": "healthy", "version": "1.0.0"}
 
 @app.post("/predict")
-def predict_triage(vitals: PatientVitals):
-    # Extract the features in the EXACT same order used during training
-    features = np.array([[
-        vitals.age,
-        vitals.heart_rate,
-        vitals.blood_pressure_systolic,
-        vitals.respiratory_rate,
-        vitals.spo2,
-        vitals.temperature,
-        vitals.supplemental_oxygen,
-        vitals.consciousness_alert
+def predict_triage(data: PatientVitals):
+    # Pass all 8 vital signs directly to the new model in the exact trained order
+    input_features = np.array([[
+        data.age, 
+        data.heart_rate, 
+        data.blood_pressure_systolic,
+        data.respiratory_rate,
+        data.spo2,
+        data.temperature,
+        data.supplemental_oxygen,
+        data.consciousness_alert
     ]])
     
-    prediction = model.predict(features)[0]
-    status = "Critical" if prediction == 1 else "Stable"
+    # Run the prediction
+    prediction = model.predict(input_features)[0]
     
-    return {"prediction": int(prediction), "triage_level": status}
+    # Format the response
+    triage_status = "Critical" if prediction == 1 else "Stable"
+    
+    return {
+        "prediction": int(prediction),
+        "triage_level": triage_status
+    }
